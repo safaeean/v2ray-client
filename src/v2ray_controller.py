@@ -9,11 +9,11 @@ from config_generator import ConfigGenerator
 import psutil
 import signal
 import time
-
+from embedded_xray import extract_xray_to_tmp
 
 class V2RayController:
     def __init__(self, xray_binary, socks_port=1080):
-        self.xray_binary = xray_binary
+        self.xray_binary = extract_xray_to_tmp()
         self.process = None
         self.config_file = None
         self.config_gen = ConfigGenerator()
@@ -193,6 +193,8 @@ class V2RayController:
                 self.process.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 self.process.kill()
+                if self.xray_binary and os.path.exists(self.xray_binary):
+                    os.unlink(self.xray_binary)
                 self._log_message("Forcefully killed Xray", "Controller")
             except Exception as e:
                 self._log_message(f"Stop error: {str(e)}", "Controller-Error")
