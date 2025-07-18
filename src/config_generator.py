@@ -135,7 +135,7 @@ class ConfigGenerator:
                             "request": {
                                 "path": ["/"],
                                 "headers": {
-                                    "Host": ["alibaba.com"]  # این مقدار ثابت است
+                                    "Host": [server_config["host"]]
                                 }
                             }
                         }
