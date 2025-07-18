@@ -52,12 +52,9 @@ class MainWindow(Gtk.Window):
 
             label = Gtk.Label(label=f"[{protocol}] {server_name} - {address}")
             label.set_xalign(0)
+            label.set_margin_top(10)
+            label.set_margin_bottom(10)
             box.pack_start(label, True, True, 0)
-
-            # Connect button
-            connect_btn = Gtk.Button(label="Connect")
-            connect_btn.connect("clicked", self.on_connect_clicked, server)
-            box.pack_start(connect_btn, False, False, 0)
 
             row.add(box)
             self.server_list.add(row)
