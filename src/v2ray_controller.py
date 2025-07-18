@@ -10,6 +10,8 @@ import psutil
 import signal
 import time
 from embedded_xray import extract_xray_to_tmp
+import shutil
+import os
 
 class V2RayController:
     def __init__(self, xray_binary, socks_port=1080):
@@ -112,6 +114,46 @@ class V2RayController:
             self._log_message(f"TLS test failed: {str(e)}", "Debug")
             return False
 
+    def redirect_all_traffic_through_socks(self):
+        def run_pkexec():
+            try:
+                script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts/run.sh"))
+
+                print(f"Script path: {script_path}")
+
+                if not os.path.exists(script_path):
+                    print(f"Error: Script not found at {script_path}")
+                else:
+                    print("Script exists, proceeding...")
+
+                try:
+                    result = subprocess.run(
+                        ["bash", script_path, "redirect.sh", str(self.socks_port)],
+                        timeout=10,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    print("Direct execution output:", result.stdout)
+                except Exception as e:
+                    print("Direct execution error:", e)
+                except subprocess.TimeoutExpired:
+                    print("Error: Script timed out after 10 seconds")
+                except subprocess.CalledProcessError as e:
+                    print(f"Script failed with error {e.returncode}:")
+                    print("Stdout:", e.stdout)
+                    print("Stderr:", e.stderr)
+                except Exception as e:
+                    print(f"Unexpected error: {e}")
+                # بعد از موفقیت می‌تونی سیگنال یا کال‌بک برای UI بزنی تا وضعیت رو به روز کنه
+            except subprocess.CalledProcessError as e:
+                print("[PKEXEC Error]", e.stderr)
+            except Exception as e:
+                print("[PKEXEC Exception]", str(e))
+
+        threading.Thread(target=run_pkexec, daemon=True).start()
+        return True  # اینجا سریع True برگردون، چون عملیات توی ترد داره انجام میشه
+
     def start(self, server_config):
         """Start with enhanced network validation"""
         # First verify if we're even connected to any network
@@ -181,6 +223,7 @@ class V2RayController:
         except Exception as e:
             self._log_message(f"Port check error: {str(e)}", "Debug")
             return False
+
 
     def stop(self):
         """Clean up the Xray process"""

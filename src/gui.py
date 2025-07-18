@@ -36,6 +36,7 @@ class MainWindow(Gtk.Window):
 
 
 
+
         self.box.pack_start(menubar, False, False, 0)
 
 
@@ -43,16 +44,80 @@ class MainWindow(Gtk.Window):
         self.scrolled_window = Gtk.ScrolledWindow()
         self.server_list = Gtk.ListBox()
         self.server_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.server_list.connect("row-activated", self.on_server_activated)
         self.scrolled_window.add(self.server_list)
         self.box.pack_start(self.scrolled_window, True, True, 0)
+
+        self.server_list.connect("row-selected", self.on_row_selected)
 
         # Status bar
         self.status_bar = Gtk.Statusbar()
         self.box.pack_end(self.status_bar, False, False, 0)
 
+        # Status bar buttons
+        self.connect_button = Gtk.Button(label="Connect")
+        self.connect_button.set_no_show_all(True)
+        self.connect_button.connect("clicked", self.on_connect_button_clicked)
+
+        self.disconnect_button = Gtk.Button(label="Disconnect")
+        self.disconnect_button.set_no_show_all(True)
+        self.disconnect_button.connect("clicked", self.on_disconnect_button_clicked)
+
+        self.redirect_button = Gtk.Button(label="Redirect Traffic")
+        self.redirect_button.set_no_show_all(True)
+        self.redirect_button.connect("clicked", self.on_redirect_button_clicked)
+
+        # Add to status bar
+        self.status_bar.pack_start(self.connect_button, False, False, 5)
+        self.status_bar.pack_start(self.disconnect_button, False, False, 5)
+        self.status_bar.pack_start(self.redirect_button, False, False, 5)
+
+        # Initial state
+        self.connect_button.hide()
+        self.disconnect_button.hide()
+        self.redirect_button.hide()
+
+
         # Load servers
         self.refresh_server_list()
+
+    def on_row_selected(self, listbox, row):
+        if row:
+            self.connect_button.show()
+        else:
+            self.connect_button.hide()
+
+    def on_connect_button_clicked(self, button):
+        row = self.server_list.get_selected_row()
+        if row:
+            index = row.get_index()
+            server = self.app.config_manager.get_servers()[index]
+            self.connect_to_server(server)
+
+            # تغییر وضعیت دکمه‌ها
+            self.connect_button.hide()
+            self.disconnect_button.show()
+            self.redirect_button.show()
+
+    def on_disconnect_button_clicked(self, button):
+        self.app.v2ray_controller.stop()
+        self.show_status("Disconnected")
+
+        # بازگرداندن وضعیت دکمه‌ها
+        self.disconnect_button.hide()
+        self.redirect_button.hide()
+
+        # اگر هنوز سروری انتخابه، connect نشون داده بشه
+        if self.server_list.get_selected_row():
+            self.connect_button.show()
+
+    def on_redirect_button_clicked(self, button):
+        success = self.app.v2ray_controller.redirect_all_traffic_through_socks()
+        print(success)
+        if success:
+            self.show_status("System traffic redirected to proxy")
+        else:
+            self.show_status("Failed to redirect traffic")
+
 
     def on_about_clicked(self, widget):
         about_dialog = Gtk.AboutDialog(
