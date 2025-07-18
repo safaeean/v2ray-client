@@ -1,4 +1,4 @@
-from gi.repository import Gtk, GObject
+from gi.repository import Gtk, GObject, GLib
 
 
 class MainWindow(Gtk.Window):
@@ -13,10 +13,31 @@ class MainWindow(Gtk.Window):
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.add(self.box)
 
-        # Add server button
-        self.add_button = Gtk.Button(label="Add Server")
-        self.add_button.connect("clicked", self.on_add_server)
-        self.box.pack_start(self.add_button, False, False, 0)
+        menubar = Gtk.MenuBar()
+
+        menu = Gtk.Menu()
+        add_item = Gtk.MenuItem(label="Add Server")
+        add_item.connect("activate", self.on_add_server)
+        menu.append(add_item)
+
+        root_menu = Gtk.MenuItem(label="Servers")
+        root_menu.set_submenu(menu)
+        menubar.append(root_menu)
+
+        about_menu = Gtk.Menu()
+        add_item = Gtk.MenuItem(label="About")
+        add_item.connect("activate", self.on_about_clicked)
+        about_menu.append(add_item)
+
+
+        help_menu = Gtk.MenuItem(label="Help")
+        help_menu.set_submenu(about_menu)
+        menubar.append(help_menu)
+
+
+
+        self.box.pack_start(menubar, False, False, 0)
+
 
         # Server list
         self.scrolled_window = Gtk.ScrolledWindow()
@@ -32,6 +53,26 @@ class MainWindow(Gtk.Window):
 
         # Load servers
         self.refresh_server_list()
+
+    def on_about_clicked(self, widget):
+        about_dialog = Gtk.AboutDialog(
+            transient_for=self,
+            modal=True
+        )
+        about_dialog.set_program_name("V2Ray Client")
+        about_dialog.set_version("1.0.0")
+        about_dialog.set_comments("A simple GTK-based V2Ray client for Linux.")
+        about_dialog.set_website("https://mndco.ir")
+        about_dialog.set_website_label("Project Website")
+        about_dialog.set_authors(["Hossein", "MNDCo"])
+        about_dialog.set_license("MIT License")
+
+        about_dialog.present()
+
+        if hasattr(about_dialog, "run"):
+            about_dialog.run()
+            about_dialog.destroy()
+
 
     def refresh_server_list(self):
         """Refresh the list of servers from config"""
@@ -60,6 +101,14 @@ class MainWindow(Gtk.Window):
             self.server_list.add(row)
 
         self.server_list.show_all()
+
+        def _defer_unselect():
+            self.server_list.unselect_all()
+            self.status_bar.grab_focus()
+            return False
+
+        GLib.idle_add(_defer_unselect)
+
 
     def on_add_server(self, button):
         """Show dialog to add new server"""
