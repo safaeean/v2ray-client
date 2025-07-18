@@ -22,6 +22,7 @@ class V2RayController:
         self.log_file = None
         self.log_thread = None
         self.running = False
+        self.running_redirect_traffic = False
         self.socks_port = socks_port
         self.config_gen = ConfigGenerator(socks_port=self.socks_port)
 
@@ -127,6 +128,7 @@ class V2RayController:
                     print("Script exists, proceeding...")
 
                 try:
+                    self.running_redirect_traffic = True
                     result = subprocess.run(
                         ["bash", script_path, "redirect.sh", str(self.socks_port)],
                         timeout=10,
@@ -134,6 +136,7 @@ class V2RayController:
                         stderr=subprocess.PIPE,
                         text=True
                     )
+
                     print("Direct execution output:", result.stdout)
                 except Exception as e:
                     print("Direct execution error:", e)
@@ -226,6 +229,33 @@ class V2RayController:
 
 
     def stop(self):
+        if self.running_redirect_traffic:
+            try:
+                script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts/run.sh"))
+
+                print(f"Script path: {script_path}")
+
+                if not os.path.exists(script_path):
+                    print(f"Error: Script not found at {script_path}")
+                else:
+                    print("Script exists, proceeding...")
+
+                try:
+                    result = subprocess.run(
+                        ["bash", script_path, "revert.sh", str(self.socks_port)],
+                        timeout=10,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    print("Direct execution output:", result.stdout)
+                except Exception as e:
+                    print("Direct execution error:", e)
+
+            except Exception as e:
+                print("Direct execution error:", e)
+
+
         """Clean up the Xray process"""
         if self.process:
             self._log_message("Stopping Xray...", "Controller")

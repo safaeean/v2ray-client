@@ -1,34 +1,59 @@
 #!/bin/bash
 
-SOCKS_PORT=$1
-if [ -z "$SOCKS_PORT" ]; then
-    echo "Usage: $0 <SOCKS_PORT>"
-    exit 1
-fi
+SOCKS_PORT=${1:-1080}
 
-# حذف tun0 اگر وجود داشته باشد
-if ip link show tun0 > /dev/null 2>&1; then
-    ip link delete tun0
-fi
+# 1. پاکسازی تنظیمات قبلی
+sudo ip link delete tun0 2>/dev/null
+sudo ip route flush table 100 2>/dev/null
+sudo ip rule del fwmark 1 2>/dev/null
+sudo iptables -t mangle -F
+sudo iptables -t nat -F
 
-# ساخت TUN interface
-ip tuntap add dev tun0 mode tun || exit 1
-ip addr add 10.0.0.2/24 dev tun0
-ip link set tun0 up
+# 2. ایجاد tun0
+sudo ip tuntap add dev tun0 mode tun
+sudo ip addr add 10.0.0.2/24 dev tun0
+sudo ip link set tun0 up
+sudo ip link set dev tun0 mtu 1500
 
-# ساخت جدول روتینگ
-ip rule add fwmark 1 table 100 2>/dev/null
-ip route add default dev tun0 table 100 2>/dev/null
+# 3. تنظیم DNS (مهم!)
+echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf >/dev/null
+echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf >/dev/null
 
-# ساخت chain فقط در صورت نیاز
-if ! iptables -t mangle -L DIVERT &>/dev/null; then
-    iptables -t mangle -N DIVERT
-    iptables -t mangle -A PREROUTING -p tcp -m socket -j DIVERT
-    iptables -t mangle -A DIVERT -j MARK --set-mark 1
-    iptables -t mangle -A DIVERT -j ACCEPT
-fi
+# 4. تنظیم routing پیشرفته
+sudo ip route add default via 10.0.0.1 dev tun0 table 100
+sudo ip rule add fwmark 1 lookup 100
 
-# اجرای tun2socks
+# 5. تنظیمات iptables دقیق
+# معاف کردن ترافیک به سمت پروکسی
+sudo iptables -t mangle -A OUTPUT -d 127.0.0.1 -p tcp --dport $SOCKS_PORT -j RETURN
+
+# مارک گذاری سایر ترافیک
+sudo iptables -t mangle -A OUTPUT -p tcp -j MARK --set-mark 1
+sudo iptables -t mangle -A OUTPUT -p udp -j MARK --set-mark 1
+
+# NAT
+sudo iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE
+
+# 6. اجرای tun2socks با پارامترهای بهینه
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"$SCRIPT_DIR/../bin/tun2socks" -device tun0 -proxyServer socks5://127.0.0.1:$SOCKS_PORT -interface tun0 &
-echo "Ok !"
+sudo "$SCRIPT_DIR/../bin/tun2socks" \
+  -device tun0 \
+  -proxy "socks5://127.0.0.1:$SOCKS_PORT" \
+  -loglevel debug \
+  -udp-timeout 30s \
+  -tcp-rcvbuf 2097152 \
+  -tcp-sndbuf 2097152 &
+
+# 7. غیرفعال کردن IPv6 (اختیاری)
+sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+
+echo "Tun2socks started successfully! Testing connectivity..."
+sleep 3
+
+# 8. تست خودکار
+echo "Testing DNS resolution..."
+dig google.com +short +time=1 +tries=1
+
+echo "Testing HTTP through tun0..."
+curl --interface tun0 --connect-timeout 5 -v http://example.com
